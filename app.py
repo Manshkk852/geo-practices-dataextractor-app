@@ -16,7 +16,7 @@ st.write("Upload one or more PDF reports to extract geospatial practices and dow
 # File uploader
 uploaded_files = st.file_uploader("Upload PDF files", type=["pdf"], accept_multiple_files=True)
 
-# Function to extract geospatial practices using OpenAI
+# Function to extract geospatial practices using GPT-3.5
 def extract_practices_with_openai(text, index):
     prompt = f"""Extract geospatial practices from the following text and format each practice as:
 [index number]. [Country name] - [Associated organization or N/A if non] - [Practice theme: energy, natural resource management, connectivity, disaster risk management, climate change mitigation or social development] - [Description of practice and technology used]
@@ -28,7 +28,7 @@ Start with index {index}.
 """
     try:
         response = client.chat.completions.create(
-            model="gpt-4",
+            model="gpt-3.5-turbo",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.7
         )
