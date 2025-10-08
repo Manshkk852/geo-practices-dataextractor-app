@@ -4,14 +4,14 @@ import pandas as pd
 import io
 import openai
 
+# 🔐 Load OpenAI API key from Streamlit secrets
+openai.api_key = st.secrets["openai"]["api_key"]
+
 # Title of the app
 st.title("Geospatial Practices Extractor")
 
 # Instructions
 st.write("Upload one or more PDF reports to extract geospatial practices and download the results as an Excel file.")
-
-# Input for OpenAI API key
-api_key = st.text_input("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", type="password")
 
 # File uploader
 uploaded_files = st.file_uploader("Upload PDF files", type=["pdf"], accept_multiple_files=True)
@@ -37,8 +37,7 @@ Start with index {index}.
         return f"Error: {e}"
 
 # Process files and extract data
-if uploaded_files and api_key:
-    openai.api_key = api_key
+if uploaded_files:
     all_practices = []
     index = 1
 
