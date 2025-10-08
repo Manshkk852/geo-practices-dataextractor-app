@@ -1,4 +1,4 @@
-1 streamlit
-2 PyMuPDF
-3 pandas
-4 openpyxl
+streamlit
+PyMuPDF
+pandas
+openpyxl
