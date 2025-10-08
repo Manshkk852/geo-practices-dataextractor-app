@@ -2,10 +2,10 @@ import streamlit as st
 import fitz  # PyMuPDF
 import pandas as pd
 import io
-import openai
+from openai import OpenAI
 
 # 🔐 Load OpenAI API key from Streamlit secrets
-openai.api_key = st.secrets["openai"]["api_key"]
+client = OpenAI(api_key=st.secrets["openai"]["api_key"])
 
 # Title of the app
 st.title("Geospatial Practices Extractor")
@@ -27,7 +27,7 @@ Text:
 Start with index {index}.
 """
     try:
-        response = openai.ChatCompletion.create(
+        response = client.chat.completions.create(
             model="gpt-4",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.7
