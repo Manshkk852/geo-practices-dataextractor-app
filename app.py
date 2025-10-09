@@ -4,10 +4,10 @@ import pandas as pd
 import io
 from openai import OpenAI
 
-# 🔐 Load OpenAI API key securely from Streamlit secrets
+
 client = OpenAI(api_key=st.secrets["openai"]["api_key"])
 
-# Title of the app
+# Title 
 st.title("Geospatial Practices Extractor")
 
 # Instructions
@@ -74,3 +74,4 @@ if uploaded_files:
         file_name="geospatial_practices.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
+
