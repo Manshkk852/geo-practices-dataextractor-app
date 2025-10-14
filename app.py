@@ -2,118 +2,132 @@ import streamlit as st
 import fitz  # PyMuPDF
 import pandas as pd
 import io
+import textwrap
 from openai import OpenAI
 
 # Initialize OpenAI client
 client = OpenAI(api_key=st.secrets["openai"]["api_key"])
 
-# Title
-st.title("Geospatial Practices Extractor (Expanded Detection)")
-
-# Instructions
+# --- UI HEADER ---
+st.title("Geospatial Practices Extractor (Full Coverage Mode)")
 st.write("""
-Upload one or more PDF reports and press **'Extract Practices'** 
-to analyze and download results as an Excel file.
-
-This version is more liberal — it captures *all potential* geospatial practices, 
-even uncertain or partial ones, for manual review.
+Upload one or more PDF reports and click **'Extract Practices'** to analyze and download the results.  
+This version uses *section-by-section extraction* to capture **all** practices in a single run.
 """)
 
 # File uploader
 uploaded_files = st.file_uploader("Upload PDF files", type=["pdf"], accept_multiple_files=True)
 
-# Function to extract geospatial practices using GPT
+# --- Helper: chunk text ---
+def chunk_text(text, max_chars=9000, overlap=500):
+    """Split text into overlapping chunks."""
+    chunks = []
+    start = 0
+    while start < len(text):
+        end = min(start + max_chars, len(text))
+        chunks.append(text[start:end])
+        start = end - overlap  # overlap for context continuity
+        if start < 0:
+            break
+    return chunks
+
+# --- Extraction function ---
 def extract_practices_with_openai(text, index):
     prompt = f"""
-You are an expert analyst extracting potential **geospatial practices** from technical and policy reports.
+You are an expert in analyzing development and environmental project documents.
 
-Be **liberal** in identifying practices — include all segments that describe:
-- Use, testing, or proposal of geospatial, mapping, remote sensing, GIS, Earth observation, or data integration technologies.
-- Development or modernization of spatial databases, mapping portals, SDI (spatial data infrastructure), or visualization systems (2D, 3D, or 4D).
-- Actions or projects involving new data adoption, pilots, partnerships, digital tools, or platforms.
-- Institutional initiatives or national efforts to use geospatial information for evidence-based decision making.
+From the following section of a report, extract **all possible geospatial practices**, 
+even if they are uncertain, small-scale, or only partially described.
 
-**Important:** 
-If in doubt, include it. It's better to list an uncertain case than to omit a relevant one.
+For this task:
+- Be *comprehensive* and *inclusive*: list everything that might qualify.
+- Look for mentions of geospatial, mapping, GIS, remote sensing, spatial databases, or digital tools.
+- Also search for or near keywords like: adoption, project, new, achievements, introduce, developed, implemented, upgraded, plan, modernize, establish.
+- If any practice seems related, list it.
 
-Also scan specifically for lines or sections containing or near the following keywords:
-“adoption”, “action”, “project”, “new”, “future”, “achievements”, “introduce”, “developed”, “implemented”, “upgrade”, “plan”, “modernize”.
-
-For **each distinct practice found**, output the following fields in the same order and formatting:
+For **each distinct practice**, output with the following structure:
 
 [index number].
-- **Practice Title:** A short, clear title summarizing the practice (5–12 words max).
+- **Practice Title:** A short, clear title (5–12 words)
 - **Country:** [country mentioned or "Unknown"]
 - **Partner/Organization:** [organization(s) involved or "N/A"]
 - **Theme:** [choose one: Energy | Natural Resource Management | Connectivity | Disaster Risk Management | Climate Change Mitigation | Social Development | Spatial Governance | Agriculture | Urban Planning]
-- **Practice Description:** [clear, short paragraph describing what was done, developed, or planned, including what technology or data type was used]
-- **Supporting Quote:** [brief direct quote or excerpt from the text supporting this practice]
+- **Practice Description:** [concise paragraph explaining what was done, developed, or planned and what technology/data was used]
+- **Supporting Quote:** [short direct quote from this section supporting this practice]
 
-Return one block per practice, starting with index {index}.
+List **all** relevant practices found in this section.  
+Do not summarize; output each one in the above structure.
 
-Text:
+Text section:
 {text}
 """
     try:
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[{"role": "user", "content": prompt}],
-            temperature=0.6  # Slightly exploratory
+            temperature=0.6
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
         return f"Error: {e}"
 
-# Button to control execution
+# --- Main processing ---
 if uploaded_files:
     if st.button("Extract Practices"):
         all_practices = []
         index = 1
 
-        with st.spinner("Extracting geospatial practices... This may take a few moments."):
+        with st.spinner("Analyzing PDFs section by section... please wait."):
             for file in uploaded_files:
-                # Read PDF content
+                # Read PDF
                 doc = fitz.open(stream=file.read(), filetype="pdf")
                 full_text = ""
                 for page in doc:
-                    full_text += page.get_text()
+                    full_text += page.get_text("text")
                 doc.close()
 
-                # Extract practices using GPT
-                extracted_text = extract_practices_with_openai(full_text, index)
+                # Chunk text
+                chunks = chunk_text(full_text)
 
-                # Parse GPT output into structured data
-                current_practice = {"File Name": file.name}
-                for line in extracted_text.split("\n"):
-                    line = line.strip()
-                    if line.startswith("- **Practice Title:**"):
-                        current_practice["Practice Title"] = line.replace("- **Practice Title:**", "").strip()
-                    elif line.startswith("- **Country:**"):
-                        current_practice["Country"] = line.replace("- **Country:**", "").strip()
-                    elif line.startswith("- **Partner/Organization:**"):
-                        current_practice["Partner/Organization"] = line.replace("- **Partner/Organization:**", "").strip()
-                    elif line.startswith("- **Theme:**"):
-                        current_practice["Theme"] = line.replace("- **Theme:**", "").strip()
-                    elif line.startswith("- **Practice Description:**"):
-                        current_practice["Practice Description"] = line.replace("- **Practice Description:**", "").strip()
-                    elif line.startswith("- **Supporting Quote:**"):
-                        current_practice["Supporting Quote"] = line.replace("- **Supporting Quote:**", "").strip()
-                    elif line.startswith("[") and current_practice.get("Practice Title"):
+                for chunk in chunks:
+                    extracted_text = extract_practices_with_openai(chunk, index)
+
+                    # Parse structured response
+                    current_practice = {"File Name": file.name}
+                    for line in extracted_text.split("\n"):
+                        line = line.strip()
+                        if line.startswith("- **Practice Title:**"):
+                            current_practice["Practice Title"] = line.replace("- **Practice Title:**", "").strip()
+                        elif line.startswith("- **Country:**"):
+                            current_practice["Country"] = line.replace("- **Country:**", "").strip()
+                        elif line.startswith("- **Partner/Organization:**"):
+                            current_practice["Partner/Organization"] = line.replace("- **Partner/Organization:**", "").strip()
+                        elif line.startswith("- **Theme:**"):
+                            current_practice["Theme"] = line.replace("- **Theme:**", "").strip()
+                        elif line.startswith("- **Practice Description:**"):
+                            current_practice["Practice Description"] = line.replace("- **Practice Description:**", "").strip()
+                        elif line.startswith("- **Supporting Quote:**"):
+                            current_practice["Supporting Quote"] = line.replace("- **Supporting Quote:**", "").strip()
+                        elif line.startswith("[") and current_practice.get("Practice Title"):
+                            all_practices.append(current_practice)
+                            index += 1
+                            current_practice = {"File Name": file.name}
+                    if current_practice.get("Practice Title"):
                         all_practices.append(current_practice)
                         index += 1
-                        current_practice = {"File Name": file.name}
-                if current_practice.get("Practice Title"):
-                    all_practices.append(current_practice)
-                    index += 1
 
-        # Create DataFrame
+        # Convert to DataFrame
         df = pd.DataFrame(all_practices)
 
+        # Deduplicate similar entries
+        if not df.empty:
+            df.drop_duplicates(subset=["Practice Title", "Supporting Quote"], inplace=True)
+
         # Display results
-        st.subheader("Extracted Geospatial Practices (Expanded)")
+        st.subheader("Extracted Geospatial Practices (Comprehensive List)")
         st.dataframe(df)
 
-        # Download Excel file
+        # Export to Excel
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             df.to_excel(writer, index=False, sheet_name='Practices')
@@ -121,9 +135,10 @@ if uploaded_files:
         st.download_button(
             label="Download Excel File",
             data=output.getvalue(),
-            file_name="geospatial_practices_expanded.xlsx",
+            file_name="geospatial_practices_fullcoverage.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
 
 else:
     st.info("Please upload one or more PDF files to begin.")
+
